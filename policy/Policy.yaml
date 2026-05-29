@@ -1,16 +1,16 @@
 authors:
   - olblak <me@olblak.com>
+  - jvanz <public@jvanz.com>
 
-url: "https://github.com/olblak/updatecli-policy-docusaurus"
-documentation: "https://github.com/olblak/updatecli-policy-docusaurus/README.md"
-source: "https://github.com/olblak/updatecli-policy-docusaurus.git"
+url: "https://github.com/jvanz/updatecli-policy-antora"
+documentation: "https://github.com/jvanz/updatecli-policy-antora/README.md"
+source: "https://github.com/jvanz/updatecli-policy-antora.git"
 
-version: v0.1.1
+version: v0.2.0
 licenses:
   - "Apache-2.0 license"
 description: |
-  Updatecli policy to automate Docusaurus documentation versioning update.
-  More information on this feature on: https://docusaurus.io/docs/versioning
+  Updatecli policy to automate Antora documentation versioning update.
+  Creates new version directories in the Antora docs site when a new release is detected.
 
-changelog: "https://github.com/olblak/updatecli-policy-docusaurus/policy/CHANGELOG.md"
-
+changelog: "https://github.com/jvanz/updatecli-policy-antora/policy/CHANGELOG.md"

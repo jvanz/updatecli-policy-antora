@@ -1,7 +1,5 @@
 project: "Kubewarden"
 repository: "kubewarden/kubewarden-controller"
-composeFile: "updatecli/updatecli-compose.yaml"
-
 scm:
   # GitHub user associated to the commit message
   user: "updatecli-bot"
@@ -21,4 +19,4 @@ scm:
   username: ""
   # GitHub branch where the pull request will be created
   # If a variable "GITHUB_REF_NAME" is set, it will be used instead
-  branch: "new-architecture"
+  branch: "main"

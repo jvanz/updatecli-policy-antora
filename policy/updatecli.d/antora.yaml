@@ -1,0 +1,155 @@
+name: "Bump {{ .project }} version in documentation"
+pipelineid: "antora/versioning"
+
+actions:
+  default:
+    kind: "github/pullrequest"
+    scmid: "website"
+    spec:
+      automerge: false
+      mergemethod: "squash"
+      labels:
+        - "chore"
+
+scms:
+  website:
+    kind: "github"
+    spec:
+      user: '{{ .scm.user }}'
+      email: '{{ .scm.email }}'
+      # {{ $GitHubRepositoryList := env "GITHUB_REPOSITORY" | split "/"}}
+      owner: '{{ default .scm.owner $GitHubRepositoryList._0 }}'
+      repository: '{{ default .scm.repository $GitHubRepositoryList._1 }}'
+      # {{ $GitHubPAT := env "GITHUB_TOKEN"}}
+      token: '{{ default .scm.token $GitHubPAT }}'
+      # {{ $GitHubUsername := env "GITHUB_ACTOR"}}}
+      username: '{{ default .scm.username $GitHubUsername }}'
+      # {{ $GitHubBranch := env "GITHUB_REF_NAME"}}}
+      branch: '{{ default .scm.branch $GitHubBranch }}'
+
+sources:
+  version:
+    name: "Get latest {{ .project }} version"
+    kind: githubrelease
+    spec:
+      # {{ $AppGitHubRepositoryList := .repository | split "/"}}
+      owner: '{{ $AppGitHubRepositoryList._0 }}'
+      repository: '{{ $AppGitHubRepositoryList._1 }}'
+      token: '{{ default .scm.token $GitHubPAT }}'
+      username: '{{ default .scm.username $GitHubUsername }}'
+      versionfilter:
+        kind: "semver"
+        pattern: ">0.1"
+    transformers:
+        - trimprefix: "v"
+        - findsubmatch:
+            pattern: '^(\d*).(\d*)'
+            captureindex: 0
+
+conditions:
+  versionNotPromoted:
+    name: "Check if {{ .project }} version needs promotion"
+    kind: "shell"
+    scmid: "website"
+    disablesourceinput: true
+    spec:
+      environments:
+        - name: "PATH"
+      changedif:
+        kind: "exitcode"
+        spec:
+          failure: 1
+          success: 0
+          warning: 1
+      command: |+
+        #!/bin/sh
+        VERSION='{{ source "version" }}'
+        ANTORA_FILE="docs/admission-controller/version-${VERSION}/antora.yml"
+        if [ -f "$ANTORA_FILE" ]; then
+          if ! grep -q "prerelease:" "$ANTORA_FILE"; then
+            echo "Version ${VERSION} is already promoted to stable"
+            exit 1
+          fi
+        fi
+        exit 0
+
+targets:
+  antora:
+    kind: "shell"
+    name: "Promote {{ .project }} version and create next dev"
+    scmid: "website"
+    disablesourceinput: true
+    spec:
+      environments:
+        - name: "PATH"
+      command: |+
+        #!/bin/sh
+        VERSION='{{ source "version" }}'
+        COMPONENT_DIR="docs/admission-controller"
+        MAJOR=$(echo "$VERSION" | cut -d. -f1)
+        MINOR=$(echo "$VERSION" | cut -d. -f2)
+        NEXT_MINOR=$((MINOR + 1))
+        NEXT_VERSION="${MAJOR}.${NEXT_MINOR}"
+
+        if [ -z "$VERSION" ]; then
+          echo "Empty version provided"
+          exit 1
+        fi
+
+        DEV_DIR=""
+        for dir in ${COMPONENT_DIR}/version-*/; do
+          if [ -f "${dir}antora.yml" ] && grep -q "prerelease:" "${dir}antora.yml"; then
+            DEV_DIR="$dir"
+            break
+          fi
+        done
+
+        if [ "$DRY_RUN" = "true" ]; then
+          echo "**DRY_RUN** promote ${VERSION}, next dev ${NEXT_VERSION}"
+          exit 0
+        fi
+
+        TARGET_DIR="${COMPONENT_DIR}/version-${VERSION}"
+
+        if [ -n "$DEV_DIR" ]; then
+          DEV_BASENAME=$(basename "$DEV_DIR")
+          if [ "$DEV_BASENAME" = "version-${VERSION}" ]; then
+            echo "Promoting ${DEV_BASENAME} to stable"
+          else
+            mv "$DEV_DIR" "$TARGET_DIR"
+            echo "Renamed ${DEV_BASENAME} to version-${VERSION}"
+          fi
+        else
+          LATEST_DIR=$(ls -d ${COMPONENT_DIR}/version-* 2>/dev/null | sort -t- -k2 -V | tail -1)
+          if [ -n "$LATEST_DIR" ]; then
+            cp -r "$LATEST_DIR" "$TARGET_DIR"
+            echo "Created version-${VERSION} from $(basename "$LATEST_DIR")"
+          else
+            echo "No existing version directory found"
+            exit 1
+          fi
+        fi
+
+        printf '%s\n' \
+          "name: admission-controller" \
+          "title: Admission Controller" \
+          "version: '${VERSION}'" \
+          "start_page: en:introduction.adoc" \
+          "nav:" \
+          "- modules/en/nav.adoc" \
+          > "${TARGET_DIR}/antora.yml"
+
+        NEXT_DIR="${COMPONENT_DIR}/version-${NEXT_VERSION}"
+        cp -r "$TARGET_DIR" "$NEXT_DIR"
+
+        printf '%s\n' \
+          "name: admission-controller" \
+          "title: Admission Controller" \
+          "version: '${NEXT_VERSION}'" \
+          "prerelease: -dev" \
+          "start_page: en:introduction.adoc" \
+          "nav:" \
+          "- modules/en/nav.adoc" \
+          > "${NEXT_DIR}/antora.yml"
+
+        echo "Promoted version-${VERSION} to stable, created version-${NEXT_VERSION} as dev"
